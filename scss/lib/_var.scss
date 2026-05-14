@@ -1,0 +1,27 @@
+///
+/// CSS variable shorthand. Opt-in.
+///
+/// Single arg: `v(accent)` -> `var(--accent)`
+/// Multi-arg builds a chained-fallback chain where the LAST argument is the
+/// outermost (primary) lookup and earlier args are progressively deeper
+/// fallbacks:
+///   v(a, b)    -> var(--b, var(--a))
+///   v(a, b, c) -> var(--c, var(--b, var(--a)))
+///
+/// Argument order matches the legacy digitalis-co `v()`: deepest fallback
+/// first, primary last. Most projects only use the single-arg form.
+/// Cascade-driven theming via [data-theme] (SPEC §2.1, §4) is preferred over
+/// chained fallbacks for theme variation.
+///
+
+@function v ($args...) {
+
+    $val: null;
+
+    @each $name in $args {
+        $val: if($val == null, var(--#{$name}), var(--#{$name}, #{$val}));
+    }
+
+    @return $val;
+
+}

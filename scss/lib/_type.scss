@@ -1,0 +1,54 @@
+///
+/// Typography helpers. Ratio constants and a `step()` function for building
+/// type scales. Caller composes `clamp()` for fluid behaviour.
+///
+/// Usage:
+///   @use 'lib/type' as type;
+///   $r: type.ratio(major-third);
+///   $h1: type.step(1rem, $r, 4);     // = 1rem * r^4
+///
+
+@use 'sass:math';
+@use 'sass:map';
+
+$ratios: (
+    minor-second:     1.067,
+    major-second:     1.125,
+    minor-third:      1.2,
+    major-third:      1.25,
+    perfect-fourth:   1.333,
+    augmented-fourth: 1.414,
+    perfect-fifth:    1.5,
+    golden-ratio:     1.618,
+);
+
+@function ratio ($name) {
+
+    @if not map.has-key($ratios, $name) {
+        @error "Unknown type ratio '#{$name}'. Available: #{map.keys($ratios)}";
+    }
+
+    @return map.get($ratios, $name);
+
+}
+
+@function step ($base, $ratio, $level) {
+
+    @return $base * math.pow($ratio, $level);
+
+}
+
+///
+/// Vendor-prefixed `background-clip: text` stack for gradient-filled text.
+///
+
+@mixin text-clip {
+
+    -webkit-text-fill-color:      transparent;
+            text-fill-color:      transparent;
+    -webkit-box-decoration-break: clone;
+            box-decoration-break: clone;
+    -webkit-background-clip:      text;
+            background-clip:      text;
+
+}

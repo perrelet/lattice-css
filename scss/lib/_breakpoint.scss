@@ -1,0 +1,49 @@
+///
+/// Breakpoint and container query mixins — see SPEC.md §6.
+///
+/// Override the default maps via the SCSS module `with` syntax:
+///
+///     @use 'lib/breakpoint' as bp with (
+///         $breakpoints: (mobile-port: 380px, mobile-land: 600px,
+///                        tablet: 1024px, desktop: 1440px),
+///         $container-breakpoints: (compact: 400px, medium: 600px),
+///     );
+///
+///     .x { @include bp.at(tablet) { ... } }
+///     .y { @include bp.container-at(medium) { ... } }
+///
+
+@use 'sass:map';
+
+$breakpoints: (
+    mobile-port:  400px,
+    mobile-land:  640px,
+    tablet:       1024px,
+    desktop:      1440px,
+) !default;
+
+$container-breakpoints: () !default;
+
+@mixin at ($name) {
+
+    $value: map.get($breakpoints, $name);
+
+    @if $value == null {
+        @error "Unknown breakpoint '#{$name}'. Available: #{map.keys($breakpoints)}";
+    }
+
+    @media (min-width: #{$value}) { @content; }
+
+}
+
+@mixin container-at ($name) {
+
+    $value: map.get($container-breakpoints, $name);
+
+    @if $value == null {
+        @error "Unknown container breakpoint '#{$name}'. Available: #{map.keys($container-breakpoints)}";
+    }
+
+    @container (min-width: #{$value}) { @content; }
+
+}

@@ -1,0 +1,106 @@
+///
+/// Multi-layer perceptually-eased shadows. One recipe, three property
+/// targets (box-shadow, drop-shadow filter, text-shadow).
+///
+/// Usage:
+///   @use 'lib/shadow' as shadow;
+///   .card  { box-shadow: shadow.box(0px, 16px, 32px, 0.1, 6, rgba(0,0,0,0)); }
+///   .icon  { filter:     shadow.drop(0px, 8px, 16px, 0.15); }
+///   .hero  { text-shadow: shadow.text(0px, 4px, 8px, 0.2); }
+///
+/// Or via the mixin form which assigns the appropriate property:
+///   .card  { @include shadow.box-shadow(0px, 16px, 32px, 0.1); }
+///
+/// The `$color` parameter must be a Sass-typed colour (rgb/rgba/hsl/etc).
+/// `var()` references aren't supported here because alpha is computed
+/// per-layer at compile time.
+///
+
+@use 'sass:math';
+@use 'sass:list';
+@use 'sass:color';
+@use 'sass:string';
+
+@function _ease ($x) {
+
+    @return math.clamp(0, $x * $x * $x, 1);
+
+}
+
+@function _layers ($x, $y, $blur, $alpha, $n, $color, $alpha-start, $invert) {
+
+    $layers: ();
+
+    @for $i from 1 through $n {
+
+        $f: math.div($i, $n);
+        $d: _ease($f);
+        $ae: if($invert, 1 - $f, $f);
+        $a: $alpha-start + ($alpha - $alpha-start) * $ae;
+        $c: color.change($color, $alpha: $a);
+
+        $layers: list.append($layers, ($x * $d, $y * $d, $blur * $d, $c));
+
+    }
+
+    @return $layers;
+
+}
+
+@function box ($x: 0px, $y: 16px, $blur: 32px, $alpha: 0.1, $n: 6, $color: rgba(0,0,0,1), $alpha-start: 0, $spread: 0px, $invert: false, $inset: false) {
+
+    $value: ();
+
+    @each $l in _layers($x, $y, $blur, $alpha, $n, $color, $alpha-start, $invert) {
+        $layer: #{list.nth($l, 1)} #{list.nth($l, 2)} #{list.nth($l, 3)} #{$spread} #{list.nth($l, 4)};
+        @if $inset { $layer: "#{$layer} inset"; }
+        $value: list.append($value, string.unquote("#{$layer}"), comma);
+    }
+
+    @return $value;
+
+}
+
+@function drop ($x: 0px, $y: 16px, $blur: 32px, $alpha: 0.1, $n: 6, $color: rgba(0,0,0,1), $alpha-start: 0, $invert: false) {
+
+    $value: ();
+
+    @each $l in _layers($x, $y, $blur, $alpha, $n, $color, $alpha-start, $invert) {
+        $value: list.append($value, drop-shadow(#{list.nth($l, 1)} #{list.nth($l, 2)} #{list.nth($l, 3)} #{list.nth($l, 4)}), space);
+    }
+
+    @return $value;
+
+}
+
+@function text ($x: 0px, $y: 4px, $blur: 8px, $alpha: 0.2, $n: 6, $color: rgba(0,0,0,1), $alpha-start: 0, $invert: false) {
+
+    $value: ();
+
+    @each $l in _layers($x, $y, $blur, $alpha, $n, $color, $alpha-start, $invert) {
+        $value: list.append($value, string.unquote("#{list.nth($l, 1)} #{list.nth($l, 2)} #{list.nth($l, 3)} #{list.nth($l, 4)}"), comma);
+    }
+
+    @return $value;
+
+}
+
+//
+
+@mixin box-shadow ($args...) {
+
+    box-shadow: box($args...);
+
+}
+
+@mixin drop-shadow ($args...) {
+
+    filter: drop($args...);
+
+}
+
+@mixin text-shadow ($args...) {
+
+    text-shadow: text($args...);
+
+}

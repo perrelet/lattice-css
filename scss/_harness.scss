@@ -1,0 +1,44 @@
+///
+/// Material harness — see SPEC.md §3.
+///
+/// Apply via @include harness; (top level) or inside .editor-styles-wrapper
+/// for editor scoping. Selectors are emitted via mixin to support both
+/// (see SPEC.md §9.5).
+///
+
+@mixin harness {
+
+    :where(section, article, aside, header, footer, nav,
+           fieldset, details, dialog, [data-surface]) {
+
+        position:   relative;
+        isolation:  isolate;
+
+        background: var(--material-bg, transparent);
+        color:      var(--material-fg, inherit);
+        border:     var(--material-border, 0);
+        box-shadow: var(--material-shadow, none);
+
+    }
+
+    // `main` is outside the :where() so this rule has specificity (0,0,1)
+    // rather than (0,0,0). At zero specificity, the universal reset
+    // (`* { padding: 0 }`) wins by source order and zeroes our padding-inline.
+    // Bumping to (0,0,1) keeps the rule below project-level overrides
+    // (`.section`, etc. at 0,1,0) but above the reset.
+    //
+    // Inner calc() is wrapped in unquote() so Dart Sass doesn't strip it
+    // during compilation. With raw `calc((100% - var(...)) / 2 + var(...))`,
+    // Sass interprets the slash as Sass division and emits the inner
+    // expression without `calc()`, producing invalid CSS that browsers
+    // silently fall back from.
+    main > :where(section, article, aside) {
+
+        padding-inline: max(
+            var(--material-pad, 0px),
+            unquote("calc((100% - var(--material-contain, 100%)) / 2 + var(--material-pad, 0px))")
+        );
+
+    }
+
+}

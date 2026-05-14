@@ -1,0 +1,51 @@
+///
+/// Colour helpers. Values-in / values-out — caller decides what to do with
+/// the result (assign to a property, derive a token, build a ramp).
+///
+/// All mixing happens at runtime via `color-mix(in oklab, ...)`. No
+/// compile-time HSL/RGB math; perceptual uniformity comes from oklab.
+///
+/// Usage:
+///   @use 'lib/color' as color;
+///   --c-accent-tint: #{color.mix(var(--accent), white, 30%)};
+///   $tints: color.tints(#00aaff, 4);   // four lighter steps toward white
+///
+
+@use 'sass:math';
+@use 'sass:list';
+
+///
+/// Mix two colours via oklab. `$stop` is how much of `$b` is in the result
+/// (0% = pure `$a`, 100% = pure `$b`).
+///
+
+@function mix ($a, $b, $stop: 50%) {
+
+    @return color-mix(in oklab, #{$a}, #{$b} #{$stop});
+
+}
+
+///
+/// Returns `$n` colours stepping from `$base` toward `$against`, evenly
+/// spaced and excluding both endpoints (so $n=4 gives the four mixes at
+/// 20%, 40%, 60%, 80%).
+///
+
+@function tints ($base, $n, $against: white) {
+
+    $list: ();
+
+    @for $i from 1 through $n {
+        $stop: 100% * math.div($i, $n + 1);
+        $list: list.append($list, mix($base, $against, $stop));
+    }
+
+    @return $list;
+
+}
+
+@function shades ($base, $n, $against: black) {
+
+    @return tints($base, $n, $against);
+
+}
