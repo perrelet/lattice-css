@@ -562,6 +562,17 @@ Frontend uses the same partials but invokes them at top level:
 
 **Fonts and other at-rules.** `@font-face` and `@keyframes` cannot nest inside selector blocks. The convention is to declare them inside a `@mixin` (e.g. `scss/_fonts.scss` exposing `@mixin declarations`) and have each entry point `@include` the mixin at top level — never inside `.editor-styles-wrapper` or another wrapper. Same shape as the selectors-only-via-mixins rule (§9.5), applied to at-rules. Self-host WOFF2 (variable fonts where available) with `font-display: swap`; preload primary faces via `wp_head`.
 
+**Match level.** Two project decisions for what to load into the editor:
+
+- *Minimal:* tokens + harness + typography only. Editor renders inline content (text, links, lists) in the right typography and colours; structural component blocks fall back to default Gutenberg appearance. Suffices when authoring is primarily through custom Views and blocks carry only plain content.
+- *Full match:* tokens + harness + all component and integration mixins re-emitted under `.editor-styles-wrapper`. **Required when components are exposed as ACF Blocks** (or any block-editor block whose render callback emits project-side markup that should look like the frontend); without it those blocks appear unstyled in-canvas and authoring is degraded.
+
+When using full match with ACF Blocks: **the block's `render_callback` must emit the same root element and class as the View it mirrors** (e.g. `<section class="product-card">…` on both sides). Otherwise the wrapped selector `.editor-styles-wrapper .product-card` doesn't match the block's HTML in-editor and the component renders unstyled. A shared `render()` method between View and block callback keeps the two outputs aligned.
+
+**Block-inserter previews are a separate scope.** The inserter renders block previews in an isolated context that does not pick up CSS from `enqueue_block_editor_assets`. Style those via per-block `editorStyle` registration in `block.json` only if needed; most projects accept default inserter previews.
+
+**Loading hook.** Enqueue editor CSS via `enqueue_block_editor_assets` (WP 5.9+ renders the editor in an iframe by default; iframe-blind hooks like raw `admin_enqueue_scripts` silently fail to apply). Load `tokens.css` first, then the compiled `editor.css` as a dependent.
+
 ### 9.5 Selectors-Only-Via-Mixins Convention
 
 **Every framework partial and every project component partial that emits selectors must do so inside a `@mixin`, not at file top level.**
