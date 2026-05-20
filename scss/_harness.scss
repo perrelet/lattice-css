@@ -1,12 +1,22 @@
 ///
 /// Material harness — see SPEC.md §3.
 ///
-/// Apply via @include harness; (top level) or inside .editor-styles-wrapper
-/// for editor scoping. Selectors are emitted via mixin to support both
-/// (see SPEC.md §9.5).
+/// Two mixins compose into the harness:
+///   • material        — rendering surface (background, colour, border,
+///                       shadow) on harnessed structural elements
+///   • contain($root)  — structural containment (padding-inline) on direct
+///                       children of $root, default 'main'
+///
+/// Frontend calls @include harness; (composite) at top level.
+/// Editor calls @include material; inside .editor-styles-wrapper plus
+/// @include contain('.editor-styles-wrapper'); at top level — the wrapper
+/// is the editor's structural root (no <main> inside the canvas).
+///
+/// Selectors emit via mixin to support both scopes (see SPEC §9.5).
 ///
 
-@mixin harness {
+
+@mixin material {
 
     :where(section, article, aside, header, footer, nav,
            fieldset, details, dialog, [data-surface]) {
@@ -21,7 +31,12 @@
 
     }
 
-    // `main` is outside the :where() so this rule has specificity (0,0,1)
+}
+
+
+@mixin contain($root: 'main') {
+
+    // $root is outside the :where() so this rule has specificity (0,0,1)
     // rather than (0,0,0). At zero specificity, the universal reset
     // (`* { padding: 0 }`) wins by source order and zeroes our padding-inline.
     // Bumping to (0,0,1) keeps the rule below project-level overrides
@@ -32,7 +47,7 @@
     // Sass interprets the slash as Sass division and emits the inner
     // expression without `calc()`, producing invalid CSS that browsers
     // silently fall back from.
-    main > :where(section, article, aside) {
+    #{$root} > :where(section, article, aside) {
 
         padding-inline: max(
             var(--material-pad, 0px),
@@ -40,5 +55,13 @@
         );
 
     }
+
+}
+
+
+@mixin harness {
+
+    @include material;
+    @include contain;
 
 }

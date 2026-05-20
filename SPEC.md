@@ -268,6 +268,8 @@ A surface with `--material-contain: 1200px` and `--material-pad: 56px` produces 
 
 **Full-bleed children** that need to escape containment are handled as the exception (via mixin or targeted negative margin), not as the default. Containment is the norm; bleed is the escape.
 
+**Containment root is parameterized.** The selector targets direct children of a structural root — `main` by default, which is the natural top-level page container on the frontend. Contexts where the structural root isn't `<main>` (the block editor canvas wraps content in `.editor-styles-wrapper`, not a `<main>`) pass the root explicitly. The framework therefore exposes the harness as two mixins — `@mixin material` (the rendering surface) and `@mixin contain($root)` (structural containment) — so each can be invoked at the scope appropriate to the context. The composite `@mixin harness` calls both with defaults, for the common frontend case. See §9.4 for the editor case.
+
 ### 3.3 Material Application
 
 Materials are applied structurally, not via classes:
@@ -531,7 +533,7 @@ Compiled SCSS context entries do not inline token declarations. They rely on `to
 
 The block editor wraps content in `.editor-styles-wrapper`. Every selector rule that should apply to editor content must be re-emitted under that wrapper. At-rules (`@font-face`, `@keyframes`) and root-level declarations (`:root`) cannot nest inside selector blocks — they stay top-level.
 
-The mechanism is mixin-shaped framework parts:
+The mechanism is mixin-shaped framework parts. The harness splits into `@mixin material` (rendering surface) and `@mixin contain($root)` (structural containment) so the editor can apply each at the right scope — `material` wraps under `.editor-styles-wrapper` like any other descendant-targeting mixin, while `contain('.editor-styles-wrapper')` runs at top level because its selector targets the wrapper itself (`.editor-styles-wrapper > section`, not a descendant):
 
 ```scss
 // editor.scss
@@ -539,10 +541,11 @@ The mechanism is mixin-shaped framework parts:
 @use 'components';
 @use 'fonts';
 
-@include fonts.declarations;          // @font-face top-level
+@include fonts.declarations;                       // @font-face top-level
+@include h.contain('.editor-styles-wrapper');      // structural containment: wrapper > sections
 
 .editor-styles-wrapper {
-    @include h.harness;
+    @include h.material;                           // rendering surface on harnessed elements
     @include components.all;
 }
 ```
@@ -839,3 +842,4 @@ These are per-project concerns, defined in the project profile:
 | v0.6 | 2026-04-19 | Entry Points section added (Section 9) as handover brief. Covers the gap between tokens/mixins and final compiled stylesheets per WordPress context (frontend, editor, admin, email/PDF, print). Documents the legacy reference, what needs deciding, constraints that apply and a suggested starting structure. Subsequent sections renumbered (Library → 10, Extension Modules → 11, Validation → 12, What This Spec Does Not Cover → 13). |
 | v0.7 | 2026-04-30 | Section 9 (Entry Points) converted from handover brief to spec — defines framework/project filesystem split (framework at `lattice-css/`, project SCSS at `scss/`, tokens at `assets/css/tokens.css`), context entry points (frontend, editor, admin, print), token loading model, editor scoping mechanism, component organisation and build timing. Token pipeline simplified (§2.2): PHP runtime API only (`Tokens::get`, `Tokens::raw`); SCSS treats tokens as opaque `var()` references; SCSS compile-time injection retracted. Selectors-only-via-mixins rule added (§9.5) — framework partials and component partials emit selectors via `@mixin`, not at top level; component partials may not declare `:root` rules. `alt()` scrapped from library; `v()` retained as opt-in (§10.1). Open questions #5 (v/alt scope) and #6 (SASSY pipeline) closed. Package directory named `lattice-css/` (PHP namespace `Lattice\Css`); the formal system name remains "Digitalis CSS System". |
 | v0.7.1 | 2026-05-08 | **Harness containment bug fixes** (`scss/_harness.scss`). Two latent bugs surfaced during D-Pace Stage 4 implementation: (1) Dart Sass strips the inner `calc()` from `calc((100% - var(...))/2 + var(--material-pad, 0px))` because it interprets the `/` as Sass division — emitted CSS is `(100% - var(...))/2 + var(...)` (no calc wrapper), which browsers silently invalidate and zero out. Fixed by wrapping the inner expression in `unquote("calc(...)")` to pass it through verbatim. (2) The selector `:where(main > section, ...)` has zero specificity, which loses to a project-level universal reset like `* { padding: 0 }` when the reset comes later in source order. Fixed by moving `main` outside the `:where()` — the new selector `main > :where(section, article, aside)` has specificity (0,0,1), beating the reset at (0,0,0) but still below project-level `.section` overrides at (0,1,0). Both bugs would have bitten every project that pairs a universal reset with the harness; flagging here so the upcoming framework-repo migration carries the rationale. |
+| v0.7.2 | 2026-05-20 | **Harness mixin split** for parameterized containment root (`scss/_harness.scss`, §3.2). `@mixin harness` split into `@mixin material` (rendering surface) and `@mixin contain($root: 'main')` (structural containment); `@mixin harness` retained as the back-compat composite calling both with defaults. Driven by the block-editor §9.4 implementation: the editor canvas wraps blocks in `.editor-styles-wrapper`, not `<main>`, so frontend `main >`-rooted containment doesn't match in-editor. With the split, editor entries call `@include h.contain('.editor-styles-wrapper');` at top level and `@include h.material;` under the wrapper. §9.4 example updated to show the pattern. Back-compat: frontend `@include h.harness;` produces identical output to v0.7.1. |
