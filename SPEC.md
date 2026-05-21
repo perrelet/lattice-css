@@ -1,4 +1,4 @@
-# Digitalis CSS System — Spec v0.7
+# Digitalis CSS System — Spec v0.8
 
 **Status:** Draft
 **Scope:** Practice-level CSS architecture for Digitalis Web Corp projects
@@ -519,13 +519,14 @@ Naming describes the WordPress context, not the file role. Projects may add or r
 
 ### 9.3 Token Loading Model
 
-Tokens flow through three channels from a single `tokens.css`:
+Tokens flow through four channels from a single `tokens.css`:
 
 | Channel | Mechanism | Consumer |
 |---|---|---|
 | Browser | Enqueued as standalone `<link>` stylesheet | All page contexts |
 | PHP runtime | Parser API (`Tokens::get`, `Tokens::raw`) | Templates, email, PDF |
 | SCSS | Opaque `var(--name)` references only | Library functions and components emit CSS using `var()` |
+| Block editor | `theme.json` palette injection via `wp_theme_json_data_theme` (see §9.8) | Core block colour picker; WP emits `.has-{slug}-color` rules using `var()` |
 
 Compiled SCSS context entries do not inline token declarations. They rely on `tokens.css` being loaded earlier in the cascade. This guarantees zero duplication: every token exists in exactly one place.
 
@@ -618,6 +619,41 @@ SASSY compiles SCSS on-demand in both development and production, using its exis
 The PHP token parser caches its output keyed on `tokens.css` mtime + content hash. The cache flushes naturally when the tokens file changes.
 
 For deploy-time cold-start mitigation, run `wp sassy compile` in deployment hooks to prime the cache before serving traffic.
+
+### 9.8 Block-Editor Colour Palette
+
+The block editor's colour picker appears on most core blocks (Paragraph, Heading, Group, Cover, Columns, etc.). Without intervention, it defaults to WP core's built-in palette (Pale Pink, Vivid Red, etc.) — disconnected from the project's token system. The framework provides a token-sourced replacement that plays cleanly with `[data-theme]` cascade reassignment.
+
+**Mechanism.** `Lattice\Css\Editor_Palette` hooks `wp_theme_json_data_theme` and injects a palette built from project-declared tokens. Each palette entry's colour value is emitted as `var(--{token})` rather than a baked hex. WP core generates `.has-{slug}-color { color: var(--{slug}); }` rules globally from the merged theme.json data, so cascade-driven theming applies at render time without project-side override CSS.
+
+**Project API.** Projects declare which tokens are palette-worthy via the `lattice_css_editor_palette` filter, returning a `[token-name => display-name]` map:
+
+```php
+add_filter('lattice_css_editor_palette', function () {
+    return [
+        'accent'    => 'Accent',
+        'highlight' => 'Highlight',
+        'text-1'    => 'Ink',
+    ];
+});
+```
+
+The token key (without `--` prefix) doubles as the WP slug, so the emitted classes are `.has-accent-color`, `.has-text-1-color`, etc. Tokens missing from `tokens.css` are silently dropped to avoid emitting broken `var()` references. Empty filter (default) is a no-op — WP's own palette remains in place.
+
+No `theme.json` file is required; the filter writes directly into the merged data WP builds at request time. Other theme.json concerns (custom-colour toggle, gradients, typography, spacing, layout) are not framework concerns — projects that need to lock editors to the palette hook `wp_theme_json_data_theme` themselves, e.g.:
+
+```php
+add_filter('wp_theme_json_data_theme', function ($d) {
+    return $d->update_with([
+        'version'  => 2,
+        'settings' => ['color' => ['custom' => false, 'defaultPalette' => false]],
+    ]);
+});
+```
+
+**Swatch-vs-render mismatch.** Editor swatch previews resolve `var(--{token})` against the canvas root, which carries default-scope token values. Blocks nested inside a `[data-theme]` scope render the scope's reassigned values via the cascade. For tokens that reassign across scopes (e.g. `--text-1` in dark scope), swatch and render differ. This is the inherent cost of cascade-driven theming — WP's preview model is single-scope, the runtime cascade is multi-scope. The framework accepts the mismatch rather than fight it, because alternative approaches (baking hex, project-side slug overrides) either break theme adaptation or produce worse inconsistencies across swatches (some adapt, some don't).
+
+For tokens that **don't** reassign in any project scope (typical for brand-fixed colours like `--accent`, `--highlight`), swatch and render always match. Projects can keep the palette tight around fixed brand colours if they want the mismatch off the table entirely.
 
 ---
 
@@ -843,3 +879,4 @@ These are per-project concerns, defined in the project profile:
 | v0.7 | 2026-04-30 | Section 9 (Entry Points) converted from handover brief to spec — defines framework/project filesystem split (framework at `lattice-css/`, project SCSS at `scss/`, tokens at `assets/css/tokens.css`), context entry points (frontend, editor, admin, print), token loading model, editor scoping mechanism, component organisation and build timing. Token pipeline simplified (§2.2): PHP runtime API only (`Tokens::get`, `Tokens::raw`); SCSS treats tokens as opaque `var()` references; SCSS compile-time injection retracted. Selectors-only-via-mixins rule added (§9.5) — framework partials and component partials emit selectors via `@mixin`, not at top level; component partials may not declare `:root` rules. `alt()` scrapped from library; `v()` retained as opt-in (§10.1). Open questions #5 (v/alt scope) and #6 (SASSY pipeline) closed. Package directory named `lattice-css/` (PHP namespace `Lattice\Css`); the formal system name remains "Digitalis CSS System". |
 | v0.7.1 | 2026-05-08 | **Harness containment bug fixes** (`scss/_harness.scss`). Two latent bugs surfaced during D-Pace Stage 4 implementation: (1) Dart Sass strips the inner `calc()` from `calc((100% - var(...))/2 + var(--material-pad, 0px))` because it interprets the `/` as Sass division — emitted CSS is `(100% - var(...))/2 + var(...)` (no calc wrapper), which browsers silently invalidate and zero out. Fixed by wrapping the inner expression in `unquote("calc(...)")` to pass it through verbatim. (2) The selector `:where(main > section, ...)` has zero specificity, which loses to a project-level universal reset like `* { padding: 0 }` when the reset comes later in source order. Fixed by moving `main` outside the `:where()` — the new selector `main > :where(section, article, aside)` has specificity (0,0,1), beating the reset at (0,0,0) but still below project-level `.section` overrides at (0,1,0). Both bugs would have bitten every project that pairs a universal reset with the harness; flagging here so the upcoming framework-repo migration carries the rationale. |
 | v0.7.2 | 2026-05-20 | **Harness mixin split** for parameterized containment root (`scss/_harness.scss`, §3.2). `@mixin harness` split into `@mixin material` (rendering surface) and `@mixin contain($root: 'main')` (structural containment); `@mixin harness` retained as the back-compat composite calling both with defaults. Driven by the block-editor §9.4 implementation: the editor canvas wraps blocks in `.editor-styles-wrapper`, not `<main>`, so frontend `main >`-rooted containment doesn't match in-editor. With the split, editor entries call `@include h.contain('.editor-styles-wrapper');` at top level and `@include h.material;` under the wrapper. §9.4 example updated to show the pattern. Back-compat: frontend `@include h.harness;` produces identical output to v0.7.1. |
+| v0.8.0 | 2026-05-20 | **Block-editor colour palette** (new `Lattice\Css\Editor_Palette` class, §9.8; §9.3 token-channel table gains a fourth row). theme.json palette injection via `wp_theme_json_data_theme`, sourced from project-declared tokens via the `lattice_css_editor_palette` filter. Entries emit as `var(--{token})` so cascade-driven theming (`[data-theme]` reassignment, density contexts) applies at render time without project-side override CSS. Empty filter is a no-op; custom-colour locking and other theme.json settings stay project-scoped. Reconciles `LATTICE_CSS_VERSION` drift (constant was `'0.7.0'` since v0.7; bumped to `'0.8.0'` matching the new feature surface). |
