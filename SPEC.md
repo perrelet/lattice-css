@@ -313,6 +313,17 @@ These examples are illustrative. Each project defines its own material assignmen
 
 **Inheritance is intentional.** `color`, `font-family`, `line-height` and other inherited properties flow from material surfaces to their children. This is the mechanism, not a side effect.
 
+### Future direction: `@scope`
+
+CSS `@scope (lower) to (upper)` is the native primitive for cascade boundaries — selectors apply from a lower-bound root down and stop at any descendant matching the upper-bound. It is the right long-term replacement for two patterns currently expressed manually in this system:
+
+- **Editorial-style scoping** — wrapping a body partial in `@scope (.editorial-body) to (.editorial-hole)` puts the whole partial at natural specificity (the scope root contributes none) and structurally cuts the cascade at `.editorial-hole` boundaries. No `:where()`-wrapping the wrapper, no explicit property-reset enumeration inside the hole.
+- **E3 Capture/Hole** — `@scope (...) to (.hole)` is the native equivalent of the per-property reset pattern described in §11. Same effect, browser-enforced.
+
+Not adopted today. The failure mode for unsupported browsers (Chrome <118, Safari <17.4, Firefox <128) is catastrophic — the entire `@scope { … }` block drops, leaving the styled region as plain HTML. Until baseline support is high enough that pre-118 Chromium users are statistical noise, the manual approaches (`:where()` for low specificity, explicit hole-reset rules) remain the safer floor.
+
+When baseline support strengthens, the migration is a mechanical rewrite of the affected partial: `#{$wrapper} { … }` → `@scope (#{$wrapper}) to (.hole) { :scope { … } … }`, with `&` resolving through `:scope` in nested mixin includes.
+
 ---
 
 ## 5. SCSS Usage Rules
@@ -780,6 +791,8 @@ For deeply nested theme inversions where a child context needs to revert to the 
 ```
 
 Most projects will not need this. Available when a design requires a "window" back to the parent theme context inside an inverted section.
+
+The same hole-shape applies beyond theming — any place a partial's cascade should stop at a nested boundary (e.g. component-rendered ACF blocks inside an editorial body partial that otherwise styles all descendant `<p>` / `<a>` / heading tags). Until `@scope ... to (.hole)` is on universal-baseline support (see §4), the manual form is: declare `.hole` as a child class on the boundary element, then reset the inherited properties the parent partial added — anchors, prose block-spacing, decorative pseudo-elements.
 
 ### E4. Material Composition Mixins
 
